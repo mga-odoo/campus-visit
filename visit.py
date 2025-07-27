@@ -7,7 +7,7 @@ import time
 # --- App Configuration ---
 app = Flask(__name__)
 # A secret key is required for session management
-app.secret_key = "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"
+app.secret_key = ""
 
 # --- Google OAuth 2.0 Configuration ---
 # IMPORTANT: You must set these environment variables with your own Google OAuth credentials
