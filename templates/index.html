@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>University Heritage Tour</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #6200EE;
+            --primary-dark-color: #3700B3;
+            --secondary-color: #03DAC6;
+            --background-color: #f4f4f9;
+            --surface-color: #ffffff;
+            --on-primary-color: #ffffff;
+            --on-surface-color: #000000;
+            --visited-color: #757575;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--background-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .app-bar {
+            background-color: var(--primary-color);
+            color: var(--on-primary-color);
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 1100;
+            flex-shrink: 0;
+        }
+        .app-bar h1 {
+            font-size: 1.25rem;
+            margin: 0;
+            font-weight: 500;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .user-details {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            line-height: 1.2;
+        }
+        .user-name {
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+        .user-email {
+            font-size: 0.75rem;
+            color: #e0e0e0; /* Lighter color for email */
+        }
+        .score-board {
+            font-size: 1rem;
+            font-weight: 500;
+        }
+        #logout-btn {
+            background: none;
+            border: none;
+            color: var(--on-primary-color);
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+
+        #map {
+            flex-grow: 1;
+            width: 100%;
+            background-color: #e0e0e0;
+        }
+
+        .info-panel {
+            background-color: var(--surface-color);
+            color: var(--on-surface-color);
+            padding: 20px;
+            box-sizing: border-box;
+            border-top-left-radius: 16px;
+            border-top-right-radius: 16px;
+            box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+            z-index: 1000;
+            flex-shrink: 0;
+            max-height: 40%;
+            overflow-y: auto;
+        }
+
+        .building-info { display: none; }
+        .building-info.active { display: block; }
+        .building-info h2 {
+            margin-top: 0;
+            font-size: 1.5rem;
+            color: var(--primary-dark-color);
+        }
+        
+        .actions {
+            display: flex;
+            gap: 16px;
+            justify-content: flex-end;
+            margin-top: 16px;
+        }
+
+        .fab {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: background-color 0.3s, box-shadow 0.3s;
+            text-transform: uppercase;
+        }
+        .fab-primary { background-color: var(--primary-color); color: var(--on-primary-color); }
+        .fab-secondary { background-color: var(--secondary-color); color: #000; }
+        
+        #toast {
+            visibility: hidden; min-width: 250px; background-color: #333; color: #fff; text-align: center;
+            border-radius: 4px; padding: 16px; position: fixed; z-index: 2000; left: 50%;
+            transform: translateX(-50%); bottom: 30px; font-size: 1rem; opacity: 0;
+            transition: opacity 0.5s, visibility 0.5s, bottom 0.5s;
+        }
+        #toast.show { visibility: visible; opacity: 1; }
+        #toast.error { background-color: #D32F2F; }
+
+        .marker-icon-container {
+            position: relative; display: flex; justify-content: center; align-items: center;
+            width: 30px; height: 42px;
+        }
+        .marker-number {
+            position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+            color: white; font-size: 12px; font-weight: bold; z-index: 2;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        .marker-background {
+            font-size: 40px; color: var(--primary-dark-color); z-index: 1;
+            position: absolute; top: 0; left: -5px;
+        }
+        .marker-background.visited { color: var(--visited-color); }
+    </style>
+</head>
+<body>
+
+    <div class="app-bar">
+        <h1>Gujarat Vidyapith</h1>
+        <div class="user-info">
+            <div class="score-board">Score: <span id="score">0</span></div>
+            <div class="user-details">
+                <span class="user-name">{{ initial_progress.name }}</span>
+                <span class="user-email">{{ initial_progress.email }}</span>
+            </div>
+            
+            <button id="logout-btn" onclick="window.location.href='/logout'"><i class="fas fa-sign-out-alt"></i></button>
+        </div>
+    </div>
+
+    <div id="map"></div>
+    
+    <div class="info-panel">
+        {% for building in buildings %}
+        <div class="building-info" id="building-{{ building.id }}">
+            <h2>{{ building.id }}. {{ building.name }}</h2>
+            <p><strong>Course:</strong> {{ building.course }}</p>
+            <p>{{ building.info }}</p>
+            <div class="actions">
+                <button class="fab fab-secondary" onclick="leaveBuilding({{ building.id }})"><i class="fas fa-sign-out-alt"></i>Leave</button>
+                <button class="fab fab-primary" onclick="visitBuilding({{ building.id }})"><i class="fas fa-map-marker-alt"></i>I'm Here</button>
+            </div>
+        </div>
+        {% endfor %}
+        <div id="tour-complete" style="display:none;">
+            <h2>Congratulations, {{ initial_progress.name }}!</h2>
+            <p>You have completed the tour. Your final score is <span id="final-score"></span>.</p>
+        </div>
+    </div>
+
+    <div id="toast"></div>
+
+    <script>
+        const buildings = {{ buildings|tojson }};
+        const map = L.map('map', { zoomControl: false }).setView([34.062, -118.23], 14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+        let progress = {{ initial_progress|tojson }};
+        const markers = [];
+
+        if (buildings && buildings.length > 0) {
+            const latlngs = [];
+            buildings.forEach(b => {
+                const isVisited = progress.visited.includes(b.id);
+                const icon = L.divIcon({
+                    className: 'marker-icon-container',
+                    html: `
+                        <span class="marker-number">${b.id}</span>
+                        <i class="fas fa-map-marker-alt marker-background ${isVisited ? 'visited' : ''}"></i>
+                    `,
+                    iconSize: [30, 42], iconAnchor: [15, 42], popupAnchor: [0, -42]
+                });
+                const marker = L.marker([b.lat, b.lng], { icon: icon }).addTo(map)
+                    .bindPopup(`<b>${b.id}. ${b.name}</b><br>${b.course}`);
+                markers.push({id: b.id, marker: marker});
+                latlngs.push([b.lat, b.lng]);
+            });
+            const polyline = L.polyline(latlngs, {color: 'var(--primary-color)', weight: 5, opacity: 0.8}).addTo(map);
+            map.fitBounds(polyline.getBounds().pad(0.1));
+        }
+
+        function updateUI() {
+            document.getElementById('score').innerText = progress.score;
+            document.querySelectorAll('.building-info').forEach(el => el.classList.remove('active'));
+
+            if (progress.current_building_id) {
+                const activePanel = document.getElementById(`building-${progress.current_building_id}`);
+                if(activePanel) {
+                    activePanel.classList.add('active');
+                    const currentBuilding = buildings.find(b => b.id === progress.current_building_id);
+                    if (currentBuilding) {
+                        map.setView([currentBuilding.lat, currentBuilding.lng], 17, { animate: true });
+                    }
+                }
+            } else {
+                document.getElementById('tour-complete').style.display = 'block';
+                document.getElementById('final-score').innerText = progress.score;
+            }
+        }
+        
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'show';
+            if (isError) toast.classList.add('error');
+            setTimeout(() => { 
+                toast.className = toast.className.replace('show', '');
+                if (isError) toast.classList.remove('error');
+            }, 3000);
+        }
+
+        async function visitBuilding(id) {
+            const response = await fetch('/api/visit_building', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ building_id: id })
+            });
+            const data = await response.json();
+            showToast(data.message || data.error, !response.ok);
+        }
+
+        async function leaveBuilding(id) {
+            const response = await fetch('/api/leave_building', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ building_id: id })
+            });
+            const data = await response.json();
+            showToast(data.message || data.error, !response.ok);
+            if(response.ok) {
+                progress.score = data.total_score;
+                progress.visited.push(id);
+                progress.current_building_id = data.next_building_id;
+
+                const markerToUpdate = markers.find(m => m.id === id);
+                if (markerToUpdate) {
+                    const newIcon = L.divIcon({
+                        className: 'marker-icon-container',
+                        html: `<span class="marker-number">${id}</span><i class="fas fa-map-marker-alt marker-background visited"></i>`,
+                        iconSize: [30, 42], iconAnchor: [15, 42], popupAnchor: [0, -42]
+                    });
+                    markerToUpdate.marker.setIcon(newIcon);
+                }
+                updateUI();
+            }
+        }
+
+        if (buildings && buildings.length > 0) {
+            updateUI();
+        } else {
+            showToast("Error: Could not load building data.", true);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - University Heritage Tour</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #6200EE;
+            --background-color: #f4f4f9;
+        }
+        body, html {
+            height: 100%;
+            margin: 0;
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: var(--background-color);
+        }
+        .login-container {
+            text-align: center;
+            background-color: white;
+            padding: 40px 50px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        .login-container h1 {
+            color: var(--primary-color);
+            margin-bottom: 10px;
+        }
+        .login-container p {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .google-login-btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 12px 24px;
+            background-color: #4285F4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: box-shadow 0.3s ease;
+        }
+        .google-login-btn:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        .google-login-btn i {
+            margin-right: 12px;
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h1>Welcome to the Heritage Tour</h1>
+        <p>Please log in with your Google account to begin.</p>
+        <a href="/login/google" class="google-login-btn">
+            <i class="fab fa-google"></i>
+            <span>Sign in with Google</span>
+        </a>
+    </div>
+</body>
+</html>
