@@ -7,7 +7,7 @@ import time
 # --- App Configuration ---
 app = Flask(__name__)
 # A secret key is required for session management
-app.secret_key = "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"
+app.secret_key = "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"
 
 # --- Google OAuth 2.0 Configuration ---
 # IMPORTANT: You must set these environment variables with your own Google OAuth credentials
@@ -19,8 +19,8 @@ app.secret_key = "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"
 #    export GOOGLE_OAUTH_CLIENT_SECRET="YOUR_CLIENT_SECRET"
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' # Use for development only (HTTP)
 google_bp = make_google_blueprint(
-    client_id="610991648558-1ilkg82i21apat15bga15v4ap8pv43qn.apps.googleusercontent.com",
-    client_secret="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",
+    client_id="",
+    client_secret="",
     scope=[
         "openid",
         "https://www.googleapis.com/auth/userinfo.email",
