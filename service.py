@@ -1,43 +1,44 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from gevent.pywsgi import WSGIServer
 
 from flask import Flask, render_template, jsonify, request, redirect, url_for, session, Response
 from flask_dance.contrib.google import make_google_blueprint, google
-from gevent.pywsgi import WSGIServer
+from werkzeug.middleware.proxy_fix import ProxyFix # Import ProxyFix
 import os
 import json
 import time
 
 # --- App Configuration ---
 app = Flask(__name__)
-
-file_path = "config.json"
-config = {}
-
-if not os.path.exists(file_path):
-    raise FileNotFoundError(f"Configuration file '{file_path}' not found.")
-
-with open(file_path, 'r') as file:
-    try:
-        config = json.load(file)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON format: {e}")
-        
 # A secret key is required for session management
-app.secret_key = config.get("app_secret_key")
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "supersecretkey-for-dev")
+
+# --- Production Proxy Configuration ---
+# When deploying behind a reverse proxy (like Nginx or Apache) that handles HTTPS,
+# this middleware ensures that Flask generates correct https:// URLs.
+# Without this, Flask might generate http:// URLs, causing OAuth redirect errors.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
 
 # --- Google OAuth 2.0 Configuration ---
 # IMPORTANT: You must set these environment variables with your own Google OAuth credentials
 # 1. Go to https://console.cloud.google.com/apis/credentials
 # 2. Create an "OAuth 2.0 Client ID" for a "Web application".
-# 3. For "Authorized redirect URIs", add: http://127.0.0.1:5000/login/google/authorized
+# 3. For "Authorized redirect URIs", add BOTH:
+#    - http://127.0.0.1:5000/login/google/authorized (for local testing)
+#    - https://visit.odoo.co.in/login/google/authorized (for production)
 # 4. Set the following environment variables before running the app:
 #    export GOOGLE_OAUTH_CLIENT_ID="YOUR_CLIENT_ID"
 #    export GOOGLE_OAUTH_CLIENT_SECRET="YOUR_CLIENT_SECRET"
-os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' # Use for development only (HTTP)
+
+# IMPORTANT FOR PRODUCTION: Remove or comment out the line below in your live environment.
+# This line is for local development only to allow OAuth over insecure HTTP.
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' 
+
 google_bp = make_google_blueprint(
-    client_id=config.get("client_id"),
-    client_secret=config.get("client_secret"),
+    client_id=os.environ.get("GOOGLE_OAUTH_CLIENT_ID"),
+    client_secret=os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET"),
     scope=[
         "openid",
         "https://www.googleapis.com/auth/userinfo.email",
@@ -46,6 +47,7 @@ google_bp = make_google_blueprint(
     redirect_to="index" # Redirect to the main page after login
 )
 app.register_blueprint(google_bp, url_prefix="/login")
+
 
 # --- Data Storage ---
 def load_buildings_data():
@@ -82,7 +84,128 @@ def get_current_user_progress():
         }
     return user_data_store[user_id]
 
-# --- Routes ---
+# --- PWA Routes ---
+
+@app.route('/manifest.json')
+def manifest():
+    """Serves the web app manifest."""
+    return jsonify({
+      "short_name": "Heritage Tour",
+      "name": "University Heritage Tour",
+      "icons": [
+        {
+          "src": "/icons/192.png",
+          "type": "image/png",
+          "sizes": "192x192",
+          "purpose": "any maskable"
+        },
+        {
+          "src": "/icons/512.png",
+          "type": "image/png",
+          "sizes": "512x512",
+          "purpose": "any maskable"
+        }
+      ],
+      "start_url": "/",
+      "background_color": "#f4f4f9",
+      "display": "standalone",
+      "scope": "/",
+      "theme_color": "#6200EE"
+    })
+
+@app.route('/icons/<size>.png')
+def icon(size):
+    """Serves placeholder icons for the PWA."""
+    # In a real app, you would serve static files. This redirects to a placeholder service.
+    # The service worker will cache this external resource.
+    return redirect(f"https://placehold.co/{size}x{size}/6200EE/FFFFFF?text=HT")
+
+@app.route('/sw.js')
+def service_worker():
+    """Serves the service worker JavaScript file."""
+    js = """
+    const CACHE_NAME = 'heritage-tour-cache-v1';
+    // These are the files that make up the "app shell" and will be cached.
+    const urlsToCache = [
+      '/',
+      '/manifest.json',
+      '/icons/192.png',
+      '/icons/512.png',
+      'https://unpkg.com/leaflet@1.7.1/dist/leaflet.css',
+      'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css',
+      'https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap',
+      'https://unpkg.com/leaflet@1.7.1/dist/leaflet.js'
+    ];
+
+    // Install event: opens a cache and adds the app shell files to it.
+    self.addEventListener('install', event => {
+      event.waitUntil(
+        caches.open(CACHE_NAME)
+          .then(cache => {
+            console.log('Opened cache');
+            // Create Request objects to handle potential redirects for icons
+            const requests = urlsToCache.map(url => new Request(url, { redirect: 'follow' }));
+            return cache.addAll(requests);
+          })
+      );
+    });
+
+    // Fetch event: serves assets from the cache first.
+    // If the asset is not in the cache, it fetches from the network,
+    // caches it, and then returns it.
+    self.addEventListener('fetch', event => {
+      // We only handle GET requests for caching.
+      if (event.request.method !== 'GET') {
+          return;
+      }
+      event.respondWith(
+        caches.match(event.request)
+          .then(response => {
+            // Cache hit - return response
+            if (response) {
+              return response;
+            }
+            return fetch(event.request).then(
+              networkResponse => {
+                // Check if we received a valid response to cache
+                if(!networkResponse || networkResponse.status !== 200) {
+                  return networkResponse;
+                }
+                // Only cache responses from our own origin or safe cross-origin resources
+                if(networkResponse.type === 'basic' || networkResponse.type === 'cors') {
+                    const responseToCache = networkResponse.clone();
+                    caches.open(CACHE_NAME)
+                      .then(cache => {
+                        cache.put(event.request, responseToCache);
+                      });
+                }
+                return networkResponse;
+              }
+            );
+          })
+      );
+    });
+
+    // Activate event: cleans up old caches.
+    self.addEventListener('activate', event => {
+      const cacheWhitelist = [CACHE_NAME];
+      event.waitUntil(
+        caches.keys().then(cacheNames => {
+          return Promise.all(
+            cacheNames.map(cacheName => {
+              if (cacheWhitelist.indexOf(cacheName) === -1) {
+                return caches.delete(cacheName);
+              }
+            })
+          );
+        })
+      );
+    });
+    """
+    return Response(js, mimetype='application/javascript')
+
+
+# --- Main Routes ---
 
 @app.route('/')
 def index():
@@ -96,8 +219,6 @@ def index():
 @app.route('/logout')
 def logout():
     """Logs the user out."""
-    # This token removal is a bit of a manual process for flask-dance
-    # to ensure the session is cleared properly.
     if 'google_oauth_token' in session:
         del session['google_oauth_token']
     return redirect(url_for('index'))
