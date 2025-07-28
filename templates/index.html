@@ -4,15 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>University Heritage Tour</title>
-
-        <!-- PWA and Mobile App Meta Tags -->
+    
+    <!-- PWA and Mobile App Meta Tags -->
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/icons/192.png">
     <meta name="theme-color" content="#6200EE"/>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="apple-mobile-web-app-title" content="Heritage Tour">
-    
+
+    <!-- Stylesheets and Libraries -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
@@ -118,7 +119,7 @@
         .actions {
             display: flex;
             gap: 16px;
-            justify-content: flex-start;
+            justify-content: flex-end;
             margin-top: 16px;
         }
 
@@ -131,9 +132,14 @@
             font-size: 1rem;
             font-weight: 500;
             cursor: pointer;
+            border-radius: 24px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            transition: background-color 0.3s, box-shadow 0.3s;
+            transition: background-color 0.3s, box-shadow 0.3s, opacity 0.3s;
             text-transform: uppercase;
+        }
+        .fab:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
         }
         .fab-primary { background-color: var(--primary-color); color: var(--on-primary-color); }
         .fab-secondary { background-color: var(--secondary-color); color: #000; }
@@ -166,14 +172,13 @@
 <body>
 
     <div class="app-bar">
-        <h1>GVP</h1>
+        <h1>Heritage Tour</h1>
         <div class="user-info">
-            <div class="score-board">Score: <span id="score">0</span></div>
             <div class="user-details">
                 <span class="user-name">{{ initial_progress.name }}</span>
                 <span class="user-email">{{ initial_progress.email }}</span>
             </div>
-            
+            <div class="score-board">Score: <span id="score">0</span></div>
             <button id="logout-btn" onclick="window.location.href='/logout'"><i class="fas fa-sign-out-alt"></i></button>
         </div>
     </div>
@@ -184,13 +189,12 @@
         {% for building in buildings %}
         <div class="building-info" id="building-{{ building.id }}">
             <h2>{{ building.id }}. {{ building.name }}</h2>
-            <div class="actions">
-                <button class="fab fab-primary" onclick="visitBuilding({{ building.id }})"><i class="fas fa-map-marker-alt"></i>I'm Here</button>
-                <button class="fab fab-secondary" onclick="leaveBuilding({{ building.id }})"><i class="fas fa-sign-out-alt"></i>Leave</button>
-            </div>
             <p><strong>Course:</strong> {{ building.course }}</p>
             <p>{{ building.info }}</p>
-            
+            <div class="actions">
+                <button class="fab fab-secondary" onclick="leaveBuilding({{ building.id }})"><i class="fas fa-sign-out-alt"></i>Leave</button>
+                <button class="fab fab-primary" onclick="visitBuilding({{ building.id }})"><i class="fas fa-map-marker-alt"></i>I'm Here</button>
+            </div>
         </div>
         {% endfor %}
         <div id="tour-complete" style="display:none;">
@@ -261,17 +265,57 @@
             setTimeout(() => { 
                 toast.className = toast.className.replace('show', '');
                 if (isError) toast.classList.remove('error');
-            }, 3000);
+            }, 4000); // Increased time for longer messages
         }
 
-        async function visitBuilding(id) {
-            const response = await fetch('/api/visit_building', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ building_id: id })
-            });
-            const data = await response.json();
-            showToast(data.message || data.error, !response.ok);
+        function visitBuilding(id) {
+            const button = document.querySelector(`#building-${id} .fab-primary`);
+            const originalButtonText = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+
+            const resetButton = () => {
+                button.disabled = false;
+                button.innerHTML = originalButtonText;
+            };
+
+            if (!navigator.geolocation) {
+                showToast("Geolocation is not supported by your browser.", true);
+                resetButton();
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const { latitude, longitude } = position.coords;
+                    try {
+                        const response = await fetch('/api/visit_building', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                building_id: id,
+                                latitude: latitude,
+                                longitude: longitude
+                            })
+                        });
+                        const data = await response.json();
+                        showToast(data.message || data.error, !response.ok);
+                    } catch (error) {
+                        showToast("Could not connect to the server.", true);
+                    } finally {
+                        resetButton();
+                    }
+                },
+                (error) => {
+                    let message = "Could not get your location. Please enable location services.";
+                    if (error.code === error.PERMISSION_DENIED) {
+                        message = "Location access was denied. Please enable it in your browser settings.";
+                    }
+                    showToast(message, true);
+                    resetButton();
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
         }
 
         async function leaveBuilding(id) {
@@ -304,6 +348,17 @@
             updateUI();
         } else {
             showToast("Error: Could not load building data.", true);
+        }
+
+        // PWA Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then(registration => {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                }, err => {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
         }
     </script>
 </body>

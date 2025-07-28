@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from gevent.pywsgi import WSGIServer
-
 from flask import Flask, render_template, jsonify, request, redirect, url_for, session, Response
 from flask_dance.contrib.google import make_google_blueprint, google
 from werkzeug.middleware.proxy_fix import ProxyFix # Import ProxyFix
 import os
 import json
 import time
+import math # Import math for distance calculation
 
 # --- App Configuration ---
 app = Flask(__name__)
@@ -48,6 +48,25 @@ google_bp = make_google_blueprint(
 )
 app.register_blueprint(google_bp, url_prefix="/login")
 
+
+# --- Helper Functions ---
+def calculate_distance(lat1, lon1, lat2, lon2):
+    """
+    Calculate the distance between two points on Earth using the Haversine formula.
+    Returns the distance in meters.
+    """
+    R = 6371000  # Radius of Earth in meters
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+
+    a = math.sin(delta_phi / 2) * math.sin(delta_phi / 2) + \
+        math.cos(phi1) * math.cos(phi2) * \
+        math.sin(delta_lambda / 2) * math.sin(delta_lambda / 2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    distance = R * c
+    return distance
 
 # --- Data Storage ---
 def load_buildings_data():
@@ -158,6 +177,10 @@ def service_worker():
       if (event.request.method !== 'GET') {
           return;
       }
+      // Don't cache API calls
+      if (event.request.url.includes('/api/')) {
+        return fetch(event.request);
+      }
       event.respondWith(
         caches.match(event.request)
           .then(response => {
@@ -225,16 +248,18 @@ def logout():
 
 @app.route('/api/visit_building', methods=['POST'])
 def visit_building():
-    """API endpoint to handle visiting a building."""
+    """API endpoint to handle visiting a building, with location verification."""
     if not google.authorized:
         return jsonify({'error': 'User not authenticated'}), 401
     
     user_progress = get_current_user_progress()
     data = request.get_json()
     building_id = data.get('building_id')
+    user_lat = data.get('latitude')
+    user_lon = data.get('longitude')
 
-    if not building_id or not isinstance(building_id, int):
-        return jsonify({'error': 'Invalid building ID'}), 400
+    if not all([building_id, user_lat, user_lon]):
+        return jsonify({'error': 'Missing building ID or location data.'}), 400
     
     if user_progress['current_building_id'] != building_id:
         return jsonify({'error': 'Please visit the correct building on the tour route.'}), 400
@@ -242,8 +267,17 @@ def visit_building():
     if building_id in user_progress['visited']:
         return jsonify({'error': 'You have already visited this building.'}), 400
 
+    # Location Verification Logic
+    ACCEPTABLE_RADIUS_METERS = 100
+    building = BUILDINGS[building_id - 1]
+    distance = calculate_distance(user_lat, user_lon, building['lat'], building['lng'])
+
+    if distance > ACCEPTABLE_RADIUS_METERS:
+        return jsonify({'error': f'You are {int(distance)} meters away. Please get closer to the building!'}), 400
+
+    # If verification passes, start the timer
     user_progress['start_time'] = time.time()
-    return jsonify({'message': f'Welcome to {BUILDINGS[building_id-1]["name"]}! Your timer has started.'})
+    return jsonify({'message': f'Location verified! Welcome to {building["name"]}. Your timer has started.'})
 
 
 @app.route('/api/leave_building', methods=['POST'])
