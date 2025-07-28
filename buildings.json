@@ -3,40 +3,40 @@
         "id": 1,
         "name": "Computer Department",
         "course": "Course in History 1",
-        "lat": 34.0532,
-        "lng": -118.2427,
+        "lat": 23.042759,
+        "lng": 72.569009,
         "info": "This is some information about building 1."
     },
     {
         "id": 2,
         "name": "Library",
         "course": "Course in History 2",
-        "lat": 34.0542,
-        "lng": -118.24170000000001,
+        "lat": 23.043114,
+        "lng": 72.569006,
         "info": "This is some information about building 2."
     },
     {
         "id": 3,
         "name": "Head Office",
         "course": "Course in History 3",
-        "lat": 34.0552,
-        "lng": -118.2407,
+        "lat": 23.043187,
+        "lng": 72.568563,
         "info": "This is some information about building 3."
     },
     {
         "id": 4,
         "name": "Hindi Bhavan",
         "course": "Course in History 4",
-        "lat": 34.0562,
-        "lng": -118.2397,
+        "lat": 23.043675,
+        "lng": 72.569234,
         "info": "This is some information about building 4."
     },
     {
         "id": 5,
         "name": "Kumar Vinay Mandir",
         "course": "Course in History 5",
-        "lat": 34.0572,
-        "lng": -118.23870000000001,
+        "lat": 23.044953,
+        "lng": 72.567628,
         "info": "This is some information about building 5."
     }
 ]

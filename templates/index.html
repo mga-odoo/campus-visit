@@ -109,7 +109,7 @@
         .actions {
             display: flex;
             gap: 16px;
-            justify-content: flex-end;
+            justify-content: flex-start;
             margin-top: 16px;
         }
 
@@ -157,7 +157,7 @@
 <body>
 
     <div class="app-bar">
-        <h1>Gujarat Vidyapith</h1>
+        <h1>GVP</h1>
         <div class="user-info">
             <div class="score-board">Score: <span id="score">0</span></div>
             <div class="user-details">
@@ -175,12 +175,13 @@
         {% for building in buildings %}
         <div class="building-info" id="building-{{ building.id }}">
             <h2>{{ building.id }}. {{ building.name }}</h2>
+            <div class="actions">
+                <button class="fab fab-primary" onclick="visitBuilding({{ building.id }})"><i class="fas fa-map-marker-alt"></i>I'm Here</button>
+                <button class="fab fab-secondary" onclick="leaveBuilding({{ building.id }})"><i class="fas fa-sign-out-alt"></i>Leave</button>
+            </div>
             <p><strong>Course:</strong> {{ building.course }}</p>
             <p>{{ building.info }}</p>
-            <div class="actions">
-                <button class="fab fab-secondary" onclick="leaveBuilding({{ building.id }})"><i class="fas fa-sign-out-alt"></i>Leave</button>
-                <button class="fab fab-primary" onclick="visitBuilding({{ building.id }})"><i class="fas fa-map-marker-alt"></i>I'm Here</button>
-            </div>
+            
         </div>
         {% endfor %}
         <div id="tour-complete" style="display:none;">

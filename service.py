@@ -1,13 +1,30 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 from flask import Flask, render_template, jsonify, request, redirect, url_for, session, Response
 from flask_dance.contrib.google import make_google_blueprint, google
+from gevent.pywsgi import WSGIServer
 import os
 import json
 import time
 
 # --- App Configuration ---
 app = Flask(__name__)
+
+file_path = "config.json"
+config = {}
+
+if not os.path.exists(file_path):
+    raise FileNotFoundError(f"Configuration file '{file_path}' not found.")
+
+with open(file_path, 'r') as file:
+    try:
+        config = json.load(file)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON format: {e}")
+        
 # A secret key is required for session management
-app.secret_key = ""
+app.secret_key = config.get("app_secret_key")
 
 # --- Google OAuth 2.0 Configuration ---
 # IMPORTANT: You must set these environment variables with your own Google OAuth credentials
@@ -19,8 +36,8 @@ app.secret_key = ""
 #    export GOOGLE_OAUTH_CLIENT_SECRET="YOUR_CLIENT_SECRET"
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1' # Use for development only (HTTP)
 google_bp = make_google_blueprint(
-    client_id="",
-    client_secret="",
+    client_id=config.get("client_id"),
+    client_secret=config.get("client_secret"),
     scope=[
         "openid",
         "https://www.googleapis.com/auth/userinfo.email",
@@ -29,7 +46,6 @@ google_bp = make_google_blueprint(
     redirect_to="index" # Redirect to the main page after login
 )
 app.register_blueprint(google_bp, url_prefix="/login")
-
 
 # --- Data Storage ---
 def load_buildings_data():
@@ -65,125 +81,6 @@ def get_current_user_progress():
             'email': user_info.get('email', 'No email provided')
         }
     return user_data_store[user_id]
-
-
-@app.route('/manifest.json')
-def manifest():
-    """Serves the web app manifest."""
-    return jsonify({
-      "short_name": "Heritage Tour",
-      "name": "University Heritage Tour",
-      "icons": [
-        {
-          "src": "/icons/192.png",
-          "type": "image/png",
-          "sizes": "192x192",
-          "purpose": "any maskable"
-        },
-        {
-          "src": "/icons/512.png",
-          "type": "image/png",
-          "sizes": "512x512",
-          "purpose": "any maskable"
-        }
-      ],
-      "start_url": "/",
-      "background_color": "#f4f4f9",
-      "display": "standalone",
-      "scope": "/",
-      "theme_color": "#6200EE"
-    })
-
-@app.route('/icons/<size>.png')
-def icon(size):
-    """Serves placeholder icons for the PWA."""
-    # In a real app, you would serve static files. This redirects to a placeholder service.
-    # The service worker will cache this external resource.
-    return redirect(f"https://placehold.co/{size}x{size}/6200EE/FFFFFF?text=HT")
-
-@app.route('/sw.js')
-def service_worker():
-    """Serves the service worker JavaScript file."""
-    js = """
-    const CACHE_NAME = 'heritage-tour-cache-v1';
-    // These are the files that make up the "app shell" and will be cached.
-    const urlsToCache = [
-      '/',
-      '/manifest.json',
-      '/icons/192.png',
-      '/icons/512.png',
-      'https://unpkg.com/leaflet@1.7.1/dist/leaflet.css',
-      'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css',
-      'https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap',
-      'https://unpkg.com/leaflet@1.7.1/dist/leaflet.js'
-    ];
-
-    // Install event: opens a cache and adds the app shell files to it.
-    self.addEventListener('install', event => {
-      event.waitUntil(
-        caches.open(CACHE_NAME)
-          .then(cache => {
-            console.log('Opened cache');
-            // Create Request objects to handle potential redirects for icons
-            const requests = urlsToCache.map(url => new Request(url, { redirect: 'follow' }));
-            return cache.addAll(requests);
-          })
-      );
-    });
-
-    // Fetch event: serves assets from the cache first.
-    // If the asset is not in the cache, it fetches from the network,
-    // caches it, and then returns it.
-    self.addEventListener('fetch', event => {
-      // We only handle GET requests for caching.
-      if (event.request.method !== 'GET') {
-          return;
-      }
-      event.respondWith(
-        caches.match(event.request)
-          .then(response => {
-            // Cache hit - return response
-            if (response) {
-              return response;
-            }
-            return fetch(event.request).then(
-              networkResponse => {
-                // Check if we received a valid response to cache
-                if(!networkResponse || networkResponse.status !== 200) {
-                  return networkResponse;
-                }
-                // Only cache responses from our own origin or safe cross-origin resources
-                if(networkResponse.type === 'basic' || networkResponse.type === 'cors') {
-                    const responseToCache = networkResponse.clone();
-                    caches.open(CACHE_NAME)
-                      .then(cache => {
-                        cache.put(event.request, responseToCache);
-                      });
-                }
-                return networkResponse;
-              }
-            );
-          })
-      );
-    });
-
-    // Activate event: cleans up old caches.
-    self.addEventListener('activate', event => {
-      const cacheWhitelist = [CACHE_NAME];
-      event.waitUntil(
-        caches.keys().then(cacheNames => {
-          return Promise.all(
-            cacheNames.map(cacheName => {
-              if (cacheWhitelist.indexOf(cacheName) === -1) {
-                return caches.delete(cacheName);
-              }
-            })
-          );
-        })
-      );
-    });
-    """
-    return Response(js, mimetype='application/javascript')
 
 # --- Routes ---
 
@@ -276,4 +173,5 @@ if __name__ == '__main__':
         with open('buildings.json', 'w') as f:
             json.dump(buildings_data, f, indent=4)
 
-    app.run("0.0.0.0", debug=True)
+    server = WSGIServer(('', 5000), app)
+    server.serve_forever()
